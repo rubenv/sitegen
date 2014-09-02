@@ -15,3 +15,5 @@ go get github.com/rubenv/sitegen
 Make a `content` and `templates` folder.
 
 Run `sitegen`.
+
+There's an example in the `example` folder.
