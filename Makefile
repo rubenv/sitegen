@@ -5,10 +5,6 @@ all: deps format
 	@mkdir -p bin/
 	@bash --norc -i ./scripts/build.sh
 
-cov:
-	gocov test ./... | gocov-html > /tmp/coverage.html
-	open /tmp/coverage.html
-
 deps:
 	@echo "--> Installing build dependencies"
 	@go get -d -v ./...
@@ -24,10 +20,4 @@ format: deps
 	@echo "--> Running go fmt"
 	@go fmt $(PACKAGES)
 
-web:
-	./scripts/website_run.sh
-
-web-push:
-	./scripts/website_push.sh
-
-.PHONY: all cov deps integ test web web-push
+.PHONY: all deps integ test
