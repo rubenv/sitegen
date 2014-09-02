@@ -12,4 +12,6 @@ go get github.com/rubenv/sitegen
 
 ## Usage
 
-TODO
+Make a `content` and `templates` folder.
+
+Run `sitegen`.
