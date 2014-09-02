@@ -1,6 +1,6 @@
 package main
 
-import "rocketeer.be/sitegen/sitegen"
+import "github.com/rubenv/sitegen/sitegen"
 
 func main() {
 	sitegen.Start()
