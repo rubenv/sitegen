@@ -163,7 +163,7 @@ func (c *ContentItem) parseContent(filename string) error {
 	}
 
 	if c.Metadata.Template == "" {
-		c.Metadata.Template = "post"
+		c.Metadata.Template = "page"
 	}
 
 	var content []byte
