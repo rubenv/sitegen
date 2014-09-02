@@ -168,12 +168,38 @@ func (c *ContentItem) parseContent(filename string) error {
 
 	var content []byte
 	if strings.HasSuffix(filename, ".md") {
-		content = blackfriday.MarkdownCommon(body)
+		content = RenderMarkdown(body)
 	} else {
 		content = body
 	}
 	c.Content = template.HTML(content)
 	return nil
+}
+
+func RenderMarkdown(input []byte) []byte {
+	// set up the HTML renderer
+	htmlFlags := 0
+	htmlFlags |= blackfriday.HTML_USE_XHTML
+	htmlFlags |= blackfriday.HTML_USE_SMARTYPANTS
+	htmlFlags |= blackfriday.HTML_SMARTYPANTS_FRACTIONS
+	htmlFlags |= blackfriday.HTML_SMARTYPANTS_LATEX_DASHES
+	htmlFlags |= blackfriday.HTML_FOOTNOTE_RETURN_LINKS
+	renderer := blackfriday.HtmlRendererWithParameters(htmlFlags, "", "", blackfriday.HtmlRendererParameters{
+		FootnoteReturnLinkContents: "↩",
+	})
+
+	// set up the parser
+	extensions := 0
+	extensions |= blackfriday.EXTENSION_NO_INTRA_EMPHASIS
+	extensions |= blackfriday.EXTENSION_TABLES
+	extensions |= blackfriday.EXTENSION_FENCED_CODE
+	extensions |= blackfriday.EXTENSION_AUTOLINK
+	extensions |= blackfriday.EXTENSION_STRIKETHROUGH
+	extensions |= blackfriday.EXTENSION_SPACE_HEADERS
+	extensions |= blackfriday.EXTENSION_HEADER_IDS
+	extensions |= blackfriday.EXTENSION_FOOTNOTES
+
+	return blackfriday.Markdown(input, renderer, extensions)
 }
 
 func (c *ContentItem) Parse(filename string) {

@@ -5,6 +5,9 @@ all: deps format
 	@mkdir -p bin/
 	@bash --norc -i ./scripts/build.sh
 
+install: all
+	@go install
+
 deps:
 	@echo "--> Installing build dependencies"
 	@go get -d -v ./...
@@ -20,4 +23,4 @@ format: deps
 	@echo "--> Running go fmt"
 	@go fmt $(PACKAGES)
 
-.PHONY: all deps integ test
+.PHONY: all install deps integ test
