@@ -14,6 +14,6 @@ go get github.com/rubenv/sitegen
 
 Make a `content` and `templates` folder.
 
-Run `sitegen`.
+Run `sitegen`, your site gets placed in the `static` folder.
 
 There's an example in the `example` folder.
