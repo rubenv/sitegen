@@ -2,7 +2,8 @@
 
 > Trivial site generator in Go.
 
-[![Build Status](https://travis-ci.org/rubenv/sitegen.png?branch=master)](https://travis-ci.org/rubenv/sitegen)
+[![Build Status](https://travis-ci.org/rubenv/sitegen.png?branch=master)](https://travis-ci.org/rubenv/sitegen) [![GoDoc](https://godoc.org/github.com/rubenv/sitegen?status.png)](https://godoc.org/github.com/rubenv/sitegen)
+
 
 ## Installation
 
