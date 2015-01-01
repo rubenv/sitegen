@@ -31,6 +31,15 @@ func Start() {
 		log.Fatal(parseError)
 	}
 
+	// Allow processing metadata
+	if processor != nil {
+		log.Println("==> Processing")
+		content.Process()
+		if processError != nil {
+			log.Fatal(processError)
+		}
+	}
+
 	// Generate the output
 	log.Println("==> Generating")
 	err = os.MkdirAll("static", 0755)
@@ -46,17 +55,22 @@ func Start() {
 
 var (
 	parseError    error = nil
+	processError  error = nil
 	generateError error = nil
 	templates     *template.Template
+
+	processor MetadataProcessor
 )
 
 type ContentItem struct {
 	Filename string
 	FullPath string
+	Url      string
 	Type     ContentType
 	Content  template.HTML
 	Children []*ContentItem
 	Metadata Metadata
+	Extra    interface{}
 }
 
 type Metadata struct {
@@ -209,6 +223,20 @@ func (c *ContentItem) Parse(filename string) {
 	}
 }
 
+func (c *ContentItem) Process() {
+	c.Url = strings.TrimPrefix(c.FullPath, "content/.")
+	extra, err := processor(c)
+	if err != nil {
+		processError = err
+		return
+	}
+	c.Extra = extra
+
+	for _, v := range c.Children {
+		v.Process()
+	}
+}
+
 func (c *ContentItem) Write(path string) {
 	fullPath := path + "/" + c.Filename
 	printName := strings.TrimPrefix(fullPath, "static/.")
@@ -249,6 +277,13 @@ func (c *ContentItem) WriteContent(path string) error {
 	}
 	defer out.Close()
 	return templates.ExecuteTemplate(out, c.Metadata.Template, c)
+}
+
+// Metadata processing
+type MetadataProcessor func(item *ContentItem) (interface{}, error)
+
+func SetMetadataProcessor(f MetadataProcessor) {
+	processor = f
 }
 
 // Utilities
