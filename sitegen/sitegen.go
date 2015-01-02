@@ -307,6 +307,7 @@ func (m *Metadata) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
+	// TODO: Use reflection to copy all fields.
 	m.Title = md.Title
 	m.Template = md.Template
 	m.Date = t
