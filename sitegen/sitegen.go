@@ -10,9 +10,10 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/russross/blackfriday"
-	"gopkg.in/yaml.v1"
+	"gopkg.in/yaml.v2"
 )
 
 func Start() {
@@ -76,6 +77,13 @@ type ContentItem struct {
 type Metadata struct {
 	Title    string
 	Template string
+	Date     time.Time
+}
+
+type metadataTime struct {
+	Title    string
+	Template string
+	Date     string
 }
 
 type ContentType int
@@ -284,6 +292,25 @@ type MetadataProcessor func(item *ContentItem) (interface{}, error)
 
 func SetMetadataProcessor(f MetadataProcessor) {
 	processor = f
+}
+
+// Time handling
+func (m *Metadata) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	md := &metadataTime{}
+	if err := unmarshal(md); err != nil {
+		return err
+	}
+
+	loc, _ := time.LoadLocation("Europe/Brussels")
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", md.Date, loc)
+	if err != nil {
+		return err
+	}
+
+	m.Title = md.Title
+	m.Template = md.Template
+	m.Date = t
+	return nil
 }
 
 // Utilities
