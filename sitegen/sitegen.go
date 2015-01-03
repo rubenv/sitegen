@@ -232,7 +232,7 @@ func (c *ContentItem) Parse(filename string) {
 }
 
 func (c *ContentItem) Process() {
-	c.Url = strings.TrimPrefix(c.FullPath, "content/.")
+	c.Url = strings.TrimSuffix(strings.TrimPrefix(c.FullPath, "content/."), "index.html")
 	extra, err := processor(c)
 	if err != nil {
 		processError = err
