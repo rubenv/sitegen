@@ -10,8 +10,11 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
+	"github.com/cheggaaa/pb"
 	"github.com/russross/blackfriday"
 	"gopkg.in/yaml.v2"
 )
@@ -48,7 +51,9 @@ func Start() {
 		log.Fatal(err)
 	}
 
-	content.Write("static")
+	queue := NewContentQueue()
+	content.Write("static", queue)
+	queue.Wait()
 	if generateError != nil {
 		log.Fatal(generateError)
 	}
@@ -61,6 +66,7 @@ var (
 	templates     *template.Template
 
 	processor MetadataProcessor
+	queue     *ContentQueue
 )
 
 type ContentItem struct {
@@ -206,9 +212,11 @@ func RenderMarkdown(input []byte) []byte {
 	htmlFlags |= blackfriday.HTML_SMARTYPANTS_FRACTIONS
 	htmlFlags |= blackfriday.HTML_SMARTYPANTS_LATEX_DASHES
 	htmlFlags |= blackfriday.HTML_FOOTNOTE_RETURN_LINKS
-	renderer := blackfriday.HtmlRendererWithParameters(htmlFlags, "", "", blackfriday.HtmlRendererParameters{
-		FootnoteReturnLinkContents: "↩",
-	})
+	renderer := &renderer{
+		Html: blackfriday.HtmlRendererWithParameters(htmlFlags, "", "", blackfriday.HtmlRendererParameters{
+			FootnoteReturnLinkContents: "↩",
+		}).(*blackfriday.Html),
+	}
 
 	// set up the parser
 	extensions := 0
@@ -222,6 +230,22 @@ func RenderMarkdown(input []byte) []byte {
 	extensions |= blackfriday.EXTENSION_FOOTNOTES
 
 	return blackfriday.Markdown(input, renderer, extensions)
+}
+
+type renderer struct {
+	*blackfriday.Html
+}
+
+func (r *renderer) BlockCode(out *bytes.Buffer, text []byte, lang string) {
+	out.WriteString("<highlight language=\"")
+	out.WriteString(lang)
+	out.WriteString("\">")
+
+	code := string(text)
+	code = strings.TrimRightFunc(code, unicode.IsSpace)
+	out.WriteString(code)
+
+	out.WriteString("</highlight>")
 }
 
 func (c *ContentItem) Parse(filename string) {
@@ -245,36 +269,42 @@ func (c *ContentItem) Process() {
 	}
 }
 
-func (c *ContentItem) Write(path string) {
+func (c *ContentItem) Write(path string, queue *ContentQueue) {
 	fullPath := path + "/" + c.Filename
 	printName := strings.TrimPrefix(fullPath, "static/.")
 	if printName != "" {
 		log.Printf(" -> %s\n", printName)
 	}
 
-	if c.Type == Directory {
-		err := os.MkdirAll(fullPath, 0755)
-		if err != nil {
-			generateError = err
-			return
+	ci := queue.Insert(c)
+
+	go func() {
+		if c.Type == Directory {
+			err := os.MkdirAll(fullPath, 0755)
+			if err != nil {
+				generateError = err
+				return
+			}
+		} else if c.Type == Content {
+			err := c.WriteContent(fullPath)
+			if err != nil {
+				generateError = err
+				return
+			}
+		} else if c.Type == Asset {
+			out := strings.Replace(c.FullPath, "content/.", "static", 1)
+			err := copyFile(c.FullPath, out)
+			if err != nil {
+				generateError = err
+				return
+			}
 		}
-	} else if c.Type == Content {
-		err := c.WriteContent(fullPath)
-		if err != nil {
-			generateError = err
-			return
-		}
-	} else if c.Type == Asset {
-		out := strings.Replace(c.FullPath, "content/.", "static", 1)
-		err := copyFile(c.FullPath, out)
-		if err != nil {
-			generateError = err
-			return
-		}
-	}
+
+		ci.Result <- true
+	}()
 
 	for _, v := range c.Children {
-		v.Write(fullPath)
+		v.Write(fullPath, queue)
 	}
 }
 
@@ -312,6 +342,48 @@ func (m *Metadata) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	m.Template = md.Template
 	m.Date = t
 	return nil
+}
+
+// Processing queue
+
+type ContentQueue struct {
+	lock  *sync.Mutex
+	items []*ContentQueueItem
+}
+
+type ContentQueueItem struct {
+	item   *ContentItem
+	Result chan bool
+}
+
+func NewContentQueue() *ContentQueue {
+	return &ContentQueue{
+		lock:  &sync.Mutex{},
+		items: make([]*ContentQueueItem, 0),
+	}
+}
+
+func (c *ContentQueue) Insert(i *ContentItem) *ContentQueueItem {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	ci := &ContentQueueItem{
+		item:   i,
+		Result: make(chan bool, 1),
+	}
+	c.items = append(c.items, ci)
+	return ci
+}
+
+func (c *ContentQueue) Wait() {
+	finished := 0
+	bar := pb.StartNew(len(c.items))
+	for finished < len(c.items) {
+		<-c.items[finished].Result
+		finished++
+		bar.Increment()
+	}
+	bar.Finish()
 }
 
 // Utilities

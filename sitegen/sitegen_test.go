@@ -57,3 +57,11 @@ func TestSplit2(t *testing.T) {
 	equals(t, string(frontMatter), "")
 	equals(t, string(body), "Just some text")
 }
+
+func TestHighlight(t *testing.T) {
+	in := `console.log("Test");`
+	out := ""
+
+	fmt.Println(in)
+	fmt.Println(out)
+}
