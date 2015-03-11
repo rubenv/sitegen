@@ -65,3 +65,36 @@ func TestHighlight(t *testing.T) {
 	fmt.Println(in)
 	fmt.Println(out)
 }
+
+func TestParseAttrs(t *testing.T) {
+	attrs := parseAttributes("")
+	assert(t, len(attrs) == 0, "Unexpected length")
+
+	attrs = parseAttributes(`language="php"`)
+	assert(t, len(attrs) == 1, "Unexpected length")
+	equals(t, attrs["language"], "php")
+
+	attrs = parseAttributes(`language="php" title="test"`)
+	assert(t, len(attrs) == 2, "Unexpected length")
+	equals(t, attrs["language"], "php")
+	equals(t, attrs["title"], "test")
+
+	attrs = parseAttributes(`language='php'`)
+	assert(t, len(attrs) == 1, "Unexpected length")
+	equals(t, attrs["language"], "php")
+
+	attrs = parseAttributes(`title="A \" quote"`)
+	assert(t, len(attrs) == 1, "Unexpected length")
+	equals(t, attrs["title"], "A \" quote")
+
+	attrs = parseAttributes(`title="A \' different quote"`)
+	assert(t, len(attrs) == 1, "Unexpected length")
+	equals(t, attrs["title"], "A ' different quote")
+
+	attrs = parseAttributes("bad")
+	assert(t, len(attrs) == 0, "Unexpected length")
+
+	attrs = parseAttributes("bad='mismatch")
+	assert(t, len(attrs) == 0, "Unexpected length")
+
+}

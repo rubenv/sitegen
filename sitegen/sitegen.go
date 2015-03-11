@@ -9,12 +9,15 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
 
 	"github.com/cheggaaa/pb"
+	"github.com/rubenv/pygmentize"
 	"github.com/russross/blackfriday"
 	"gopkg.in/yaml.v2"
 )
@@ -55,7 +58,7 @@ func Start() {
 	content.Write("static", queue)
 	queue.Wait()
 	if generateError != nil {
-		log.Fatal(generateError)
+		log.Printf("Failed to generate: %#v\n", generateError.Error())
 	}
 }
 
@@ -279,27 +282,10 @@ func (c *ContentItem) Write(path string, queue *ContentQueue) {
 	ci := queue.Insert(c)
 
 	go func() {
-		if c.Type == Directory {
-			err := os.MkdirAll(fullPath, 0755)
-			if err != nil {
-				generateError = err
-				return
-			}
-		} else if c.Type == Content {
-			err := c.WriteContent(fullPath)
-			if err != nil {
-				generateError = err
-				return
-			}
-		} else if c.Type == Asset {
-			out := strings.Replace(c.FullPath, "content/.", "static", 1)
-			err := copyFile(c.FullPath, out)
-			if err != nil {
-				generateError = err
-				return
-			}
+		err := c.write(fullPath)
+		if err != nil {
+			generateError = err
 		}
-
 		ci.Result <- true
 	}()
 
@@ -308,13 +294,88 @@ func (c *ContentItem) Write(path string, queue *ContentQueue) {
 	}
 }
 
+func (c *ContentItem) write(path string) error {
+	if c.Type == Directory {
+		err := os.MkdirAll(path, 0755)
+		if err != nil {
+			return err
+		}
+	} else if c.Type == Content {
+		err := c.WriteContent(path)
+		if err != nil {
+			return fmt.Errorf("write failed for %s: %s", path, err)
+		}
+	} else if c.Type == Asset {
+		out := strings.Replace(c.FullPath, "content/.", "static", 1)
+		err := copyFile(c.FullPath, out)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+var codeRegex = regexp.MustCompile(`(?s)<highlight(.*?)>(.*?)</highlight>`)
+
 func (c *ContentItem) WriteContent(path string) error {
 	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	return templates.ExecuteTemplate(out, c.Metadata.Template, c)
+
+	buf := &bytes.Buffer{}
+	err = templates.ExecuteTemplate(buf, c.Metadata.Template, c)
+	if err != nil {
+		return err
+	}
+
+	var innerErr error = nil
+	var badCode string = ""
+	html := codeRegex.ReplaceAllStringFunc(string(buf.Bytes()), func(in string) string {
+		parts := codeRegex.FindStringSubmatch(in)
+		attrs := parseAttributes(parts[1])
+		code := strings.TrimRightFunc(parts[2], unicode.IsSpace)
+
+		formatted, err := pygmentize.HighlightLanguage(code, attrs["language"], pygmentize.NewHtmlFormatter())
+		if err != nil {
+			innerErr = err
+			badCode = code
+			return ""
+		}
+
+		lines := strings.Split(strings.TrimRightFunc(formatted, unicode.IsSpace), "\n")
+
+		var out bytes.Buffer
+		out.WriteString(`<div class="code`)
+		if attrs["language"] != "" {
+			out.WriteString(" code-")
+			out.WriteString(attrs["language"])
+		}
+		out.WriteString(`"><table><tr><td class="nrs">`)
+		for i, _ := range lines {
+			out.WriteString(`<div class="nr">`)
+			out.WriteString(strconv.Itoa(i + 1))
+			out.WriteString(`</div>`)
+		}
+		out.WriteString(`</td><td class="code">`)
+		for _, l := range lines {
+			out.WriteString(`<div class="line"><pre>`)
+			out.WriteString(l)
+			out.WriteString(`</pre></div>`)
+		}
+		out.WriteString(`</td></tr></table></div>`)
+		return string(out.Bytes())
+	})
+	if innerErr != nil {
+		log.Printf("%s %#v\n", path, innerErr.Error())
+		log.Println(badCode)
+		return innerErr
+	}
+
+	_, err = out.WriteString(html)
+	return err
 }
 
 // Metadata processing
@@ -387,6 +448,65 @@ func (c *ContentQueue) Wait() {
 }
 
 // Utilities
+
+var attrRegex = regexp.MustCompile(`(\w+)=('|")(.*?)('|")`)
+
+type step int
+
+const (
+	attr_key   step = iota
+	attr_val   step = iota
+	attr_space step = iota
+)
+
+func parseAttributes(in string) map[string]string {
+	attrs := make(map[string]string)
+
+	curr := attr_key
+	start := 0
+	pos := 0
+
+	key := ""
+	val := ""
+	quote := '"'
+
+	for pos < len(in) {
+		switch curr {
+		case attr_key:
+			if in[pos] == '=' {
+				key = in[start:pos]
+				val = ""
+				curr = attr_val
+				quote = rune(in[pos+1])
+				start = pos + 2
+				pos++
+			}
+			pos++
+		case attr_val:
+			if in[pos] == '\\' {
+				val += in[start:pos]
+				pos++
+				val += in[pos : pos+1]
+				pos++
+				start = pos
+			} else if rune(in[pos]) == quote {
+				val += in[start:pos]
+				attrs[key] = val
+				curr = attr_space
+			}
+			pos++
+		case attr_space:
+			if in[pos] == ' ' {
+				pos++
+			} else {
+				curr = attr_key
+				start = pos
+			}
+		}
+	}
+
+	return attrs
+}
 
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
