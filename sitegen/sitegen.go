@@ -353,13 +353,19 @@ func (c *ContentItem) WriteContent(path string) error {
 			out.WriteString(" code-")
 			out.WriteString(attrs["language"])
 		}
-		out.WriteString(`"><table><tr><td class="nrs">`)
+		out.WriteString(`">`)
+		if attrs["title"] != "" {
+			out.WriteString(`<div class="title">`)
+			out.WriteString(attrs["title"])
+			out.WriteString(`</div>`)
+		}
+		out.WriteString(`<table><tr><td class="nrs">`)
 		for i, _ := range lines {
 			out.WriteString(`<div class="nr">`)
 			out.WriteString(strconv.Itoa(i + 1))
 			out.WriteString(`</div>`)
 		}
-		out.WriteString(`</td><td class="code">`)
+		out.WriteString(`</td><td class="src">`)
 		for _, l := range lines {
 			out.WriteString(`<div class="line"><pre>`)
 			out.WriteString(l)
