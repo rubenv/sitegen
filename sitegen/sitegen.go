@@ -337,6 +337,7 @@ func (c *ContentItem) WriteContent(path string) error {
 		parts := codeRegex.FindStringSubmatch(in)
 		attrs := parseAttributes(parts[1])
 		code := strings.TrimRightFunc(parts[2], unicode.IsSpace)
+		code = strings.TrimLeft(code, "\n")
 
 		formatted, err := pygmentize.HighlightLanguage(code, attrs["language"], pygmentize.NewHtmlFormatter())
 		if err != nil {
@@ -359,19 +360,16 @@ func (c *ContentItem) WriteContent(path string) error {
 			out.WriteString(attrs["title"])
 			out.WriteString(`</div>`)
 		}
-		out.WriteString(`<table><tr><td class="nrs">`)
+		out.WriteString(`<div class="scroller"><table><tr><td class="nrs">`)
 		for i, _ := range lines {
 			out.WriteString(`<div class="nr">`)
 			out.WriteString(strconv.Itoa(i + 1))
 			out.WriteString(`</div>`)
 		}
-		out.WriteString(`</td><td class="src">`)
-		for _, l := range lines {
-			out.WriteString(`<div class="line"><pre>`)
-			out.WriteString(l)
-			out.WriteString(`</pre></div>`)
-		}
-		out.WriteString(`</td></tr></table></div>`)
+		out.WriteString(`</td><td class="src"><pre>`)
+		out.WriteString("<pre>")
+		out.WriteString(strings.TrimRightFunc(formatted, unicode.IsSpace))
+		out.WriteString(`</pre></td></tr></table></div></div>`)
 		return string(out.Bytes())
 	})
 	if innerErr != nil {
