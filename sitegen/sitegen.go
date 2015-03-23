@@ -466,6 +466,7 @@ const (
 )
 
 func parseAttributes(in string) map[string]string {
+	in = strings.TrimSpace(in)
 	attrs := make(map[string]string)
 
 	curr := attr_key
